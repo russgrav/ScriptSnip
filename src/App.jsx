@@ -20,6 +20,9 @@ import { CondenserEngine } from './condenser-engine.js';
 import { FileManager } from './file-manager.js';
 import { defaultConfig } from './types.js';
 
+// Import testing utilities (for development) - temporarily disabled
+// import { runMatchingTests, testWithYourFiles } from './matcher-tests.js';
+
 function App() {
   // Theme state
   const [theme, setTheme] = useState(() => {
@@ -46,6 +49,16 @@ function App() {
     condenserEngineRef.current = new CondenserEngine((progressState) => {
       setProgress(progressState);
     });
+    
+    // Add test functions to window for console debugging (only in development)
+    // Temporarily disabled
+    /*
+    if (process.env.NODE_ENV === 'development') {
+      window.testIntelligentMatcher = runMatchingTests;
+      window.testWithYourFiles = testWithYourFiles;
+      window.fileManager = fileManagerRef.current;
+    }
+    */
   }, []);
 
   // Theme effect
@@ -70,8 +83,17 @@ function App() {
       if (validation.videoFiles.length > 5 || estimate.estimatedMemoryMB > 1000) {
         console.log(`Large batch detected: ${validation.videoFiles.length} files, ~${estimate.estimatedMemoryMB.toFixed(0)}MB estimated memory usage`);
       }
+      
+      // Get matching statistics
+      const matchingStats = fileManagerRef.current.getMatchingStats(validation.videoFiles, files, config);
+      console.log('File matching stats:', matchingStats);
+      
+      // Show intelligent matching info if any files use it
+      if (matchingStats.intelligentMatches > 0) {
+        console.log(`Intelligent matching found ${matchingStats.intelligentMatches} matches that wouldn't have been found with exact matching`);
+      }
     }
-  }, []);
+  }, [config]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -192,6 +214,7 @@ function App() {
     if (selectedFiles.length === 0) return null;
 
     const validation = fileManagerRef.current.validateFiles(selectedFiles);
+    const matchingStats = fileManagerRef.current.getMatchingStats(validation.videoFiles, selectedFiles, config);
 
     return (
       <div className="file-list">
@@ -199,11 +222,22 @@ function App() {
           let statusClass = 'status-invalid';
           let statusText = 'Unsupported';
           let icon = <AlertCircle size={16} />;
+          let subtitle = null;
 
           if (fileManagerRef.current.isVideoFile(file)) {
             statusClass = 'status-video';
             statusText = 'Video';
             icon = <Film size={16} />;
+            
+            // Find matching subtitle
+            const matchInfo = matchingStats.matchedFiles.find(m => m.video === file.name);
+            if (matchInfo) {
+              subtitle = matchInfo.subtitle;
+              statusText += ` (${matchInfo.type} match)`;
+            } else {
+              statusText += ' (no subtitle)';
+              statusClass += ' no-match';
+            }
           } else if (fileManagerRef.current.isSubtitleFile(file)) {
             statusClass = 'status-subtitle';
             statusText = 'Subtitle';
@@ -215,6 +249,11 @@ function App() {
               <div className="file-info">
                 <div className="file-name">{file.name}</div>
                 <div className="file-size">{fileManagerRef.current.formatFileSize(file.size)}</div>
+                {subtitle && (
+                  <div className="file-subtitle-match">
+                    → {subtitle}
+                  </div>
+                )}
               </div>
               <div className={`file-status ${statusClass}`}>
                 {icon}
@@ -223,6 +262,28 @@ function App() {
             </div>
           );
         })}
+
+        {/* Show matching summary */}
+        {validation.videoFiles.length > 0 && (
+          <div className="matching-summary">
+            <div className="summary-item">
+              <CheckCircle size={16} />
+              {matchingStats.exactMatches + matchingStats.intelligentMatches} of {matchingStats.total} videos have matching subtitles
+            </div>
+            {matchingStats.intelligentMatches > 0 && (
+              <div className="summary-item intelligent">
+                <Info size={16} />
+                {matchingStats.intelligentMatches} found using intelligent pattern matching
+              </div>
+            )}
+            {matchingStats.noMatches > 0 && (
+              <div className="summary-item warning">
+                <AlertCircle size={16} />
+                {matchingStats.noMatches} videos without matching subtitles
+              </div>
+            )}
+          </div>
+        )}
 
         {validation.invalidFiles.length > 0 && (
           <div className="warning-message">
@@ -483,6 +544,39 @@ function App() {
         <p style={{ lineHeight: '1.7', color: 'var(--text-secondary)' }}>
           All processing happens locally in your browser. No files are uploaded to any server.
         </p>
+
+        <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>Intelligent File Matching:</h4>
+        <p style={{ marginBottom: '1rem', lineHeight: '1.7', color: 'var(--text-secondary)' }}>
+          ScriptSnip now includes intelligent pattern-based file matching that can pair video and subtitle files even when their names don't exactly match. It recognizes episode numbers in various formats including bracketed numbers [01], season/episode patterns S01E01, and episode prefixes like "Episode 01".
+        </p>
+        
+        <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>Example file patterns that will be automatically matched:</h4>
+        <div style={{ fontFamily: 'monospace', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', marginBottom: '2rem' }}>
+          <p style={{ margin: '0.5rem 0', color: 'var(--text-primary)' }}>Video: [VCB-Studio] Fullmetal Alchemist Brotherhood [01][1080p].mkv</p>
+          <p style={{ margin: '0.5rem 0', color: 'var(--text-primary)' }}>Subtitle: Fullmetal Alchemist - Brotherhood S01E01 jpn.srt</p>
+          <p style={{ margin: '0.5rem 0', color: 'var(--success)' }}>→ Automatically matched by episode number "01"</p>
+        </div>
+        
+        <div style={{ marginBottom: '2rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+            Intelligent matching temporarily disabled - working on import fix
+          </p>
+          {/* Temporarily disabled
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => {
+              console.log('Running intelligent matcher tests...');
+              runMatchingTests();
+              console.log('Testing with your file examples...');
+              testWithYourFiles();
+              console.log('Check the console above for detailed test results!');
+            }}
+          >
+            <Info size={16} />
+            Run Matching Tests (Check Console)
+          </button>
+          */}
+        </div>
       </div>
     </div>
   );

@@ -29,16 +29,54 @@ export class FileManager {
 
   /**
    * Find subtitle file with same name as video (port from Python find_subtitle_with_same_name_as_file)
+   * Enhanced with basic pattern matching for episode numbers
    */
   findSubtitleWithSameName(videoFile, allFiles, config) {
     const baseName = this.getBaseName(videoFile.name);
     
-    // Check for files with sub_suffix (Python logic)
+    // First, try exact name matching with sub_suffix (original Python logic)
     for (const ext of this.subtitleExtensions) {
       const subtitleName = baseName + config.subSuffix + ext;
       const matchingFile = allFiles.find(f => f.name === subtitleName);
       if (matchingFile) {
+        console.log(`Found exact match: ${videoFile.name} -> ${matchingFile.name}`);
         return matchingFile;
+      }
+    }
+    
+    // If exact matching fails, try simple episode number matching
+    const videoEpisode = this.extractEpisodeNumber(videoFile.name);
+    if (videoEpisode) {
+      const subtitleFiles = allFiles.filter(f => this.isSubtitleFile(f));
+      for (const subtitleFile of subtitleFiles) {
+        const subtitleEpisode = this.extractEpisodeNumber(subtitleFile.name);
+        if (subtitleEpisode && videoEpisode === subtitleEpisode) {
+          console.log(`Found episode match: ${videoFile.name} (${videoEpisode}) -> ${subtitleFile.name} (${subtitleEpisode})`);
+          return subtitleFile;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Simple episode number extraction for basic matching
+   */
+  extractEpisodeNumber(filename) {
+    // Try various episode number patterns
+    const patterns = [
+      /\[(\d+)\]/,           // [01], [1] - brackets
+      /S\d+E(\d+)/i,         // S01E01, S1E1 - season episode
+      /Episode[\s_]*(\d+)/i, // Episode 01, Episode_1
+      /Ep[\s_]*(\d+)/i,      // Ep01, Ep_1
+      /E(\d+)/i,             // E01, E1
+    ];
+    
+    for (const pattern of patterns) {
+      const match = filename.match(pattern);
+      if (match) {
+        return parseInt(match[1]);
       }
     }
     
@@ -51,17 +89,31 @@ export class FileManager {
   findMatchingSubtitles(videoFiles, allFiles, config) {
     const matches = [];
     const invalidVideos = [];
+    const matchingDetails = [];
 
     for (const videoFile of videoFiles) {
       const subtitle = this.findSubtitleWithSameName(videoFile, allFiles, config);
       matches.push(subtitle);
       
-      if (!subtitle) {
+      // Track matching details for reporting
+      if (subtitle) {
+        const exactMatch = this.findExactMatch(videoFile, allFiles, config);
+        matchingDetails.push({
+          video: videoFile.name,
+          subtitle: subtitle.name,
+          matchType: exactMatch ? 'exact' : 'intelligent'
+        });
+      } else {
         invalidVideos.push(videoFile);
+        matchingDetails.push({
+          video: videoFile.name,
+          subtitle: null,
+          matchType: 'none'
+        });
       }
     }
 
-    return { matches, invalidVideos };
+    return { matches, invalidVideos, matchingDetails };
   }
 
   /**
@@ -154,5 +206,55 @@ export class FileManager {
     } else {
       return `${seconds}s`;
     }
+  }
+
+  /**
+   * Find exact match only (without intelligent matching)
+   * Used for comparison and debugging
+   */
+  findExactMatch(videoFile, allFiles, config) {
+    const baseName = this.getBaseName(videoFile.name);
+    
+    for (const ext of this.subtitleExtensions) {
+      const subtitleName = baseName + config.subSuffix + ext;
+      const matchingFile = allFiles.find(f => f.name === subtitleName);
+      if (matchingFile) {
+        return matchingFile;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get matching statistics for a set of files
+   */
+  getMatchingStats(videoFiles, allFiles, config) {
+    const stats = {
+      total: videoFiles.length,
+      exactMatches: 0,
+      intelligentMatches: 0,
+      noMatches: 0,
+      matchedFiles: [],
+      unmatchedFiles: []
+    };
+
+    for (const videoFile of videoFiles) {
+      const exactMatch = this.findExactMatch(videoFile, allFiles, config);
+      const anyMatch = this.findSubtitleWithSameName(videoFile, allFiles, config);
+
+      if (exactMatch) {
+        stats.exactMatches++;
+        stats.matchedFiles.push({ video: videoFile.name, subtitle: exactMatch.name, type: 'exact' });
+      } else if (anyMatch) {
+        stats.intelligentMatches++;
+        stats.matchedFiles.push({ video: videoFile.name, subtitle: anyMatch.name, type: 'intelligent' });
+      } else {
+        stats.noMatches++;
+        stats.unmatchedFiles.push(videoFile.name);
+      }
+    }
+
+    return stats;
   }
 }
