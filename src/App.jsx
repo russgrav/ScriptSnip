@@ -427,10 +427,7 @@ function App() {
                   )}
                 </span>
                 <span className="progress-percentage">
-                  {progress.total > 0 ? 
-                    `${Math.round(progress.currentFileProgress || 0)}% (${progress.progress}/${progress.total})` : 
-                    `${Math.round(progress.currentFileProgress || 0)}%`
-                  }
+                  {Math.round(progress.currentFileProgress || 0)}%
                 </span>
               </div>
               <div className="progress-bar">

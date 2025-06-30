@@ -88,7 +88,7 @@ export class AudioProcessor {
     }
 
     this.onProgress?.({
-      stage: 'extracting',
+      stage: 'Extracting audio',
       progress: 0,
       total: 100,
       message: 'Extracting audio from video...'
@@ -102,7 +102,7 @@ export class AudioProcessor {
       await this.ffmpeg.writeFile('input.mkv', inputData);
 
       this.onProgress?.({
-        stage: 'extracting',
+        stage: 'Extracting audio',
         progress: 25,
         total: 100,
         message: 'Processing with FFmpeg...'
@@ -123,7 +123,7 @@ export class AudioProcessor {
       console.log('FFmpeg extraction completed');
 
       this.onProgress?.({
-        stage: 'extracting',
+        stage: 'Extracting audio',
         progress: 75,
         total: 100,
         message: 'Reading extracted audio...'
@@ -137,7 +137,7 @@ export class AudioProcessor {
       console.log(`Decoded audio buffer: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
 
       this.onProgress?.({
-        stage: 'extracting',
+        stage: 'Extracting audio',
         progress: 100,
         total: 100,
         message: 'Audio extraction complete'
@@ -155,7 +155,7 @@ export class AudioProcessor {
    */
   async extractAudioSegments(periods, audioBuffer) {
     this.onProgress?.({
-      stage: 'segmenting',
+      stage: 'Processing segments',
       progress: 0,
       total: periods.length,
       message: 'Extracting audio segments...'
@@ -200,7 +200,7 @@ export class AudioProcessor {
 
       // Progress update
       this.onProgress?.({
-        stage: 'segmenting',
+        stage: 'Processing segments',
         progress: i + 1,
         total: periods.length,
         message: `Extracted segment ${i + 1}/${periods.length} (${(period.end - period.start)}ms)`
@@ -225,7 +225,7 @@ export class AudioProcessor {
     }
 
     this.onProgress?.({
-      stage: 'concatenating',
+      stage: 'Concatenating',
       progress: 0,
       total: 100,
       message: 'Concatenating audio segments...'
@@ -262,7 +262,7 @@ export class AudioProcessor {
       // Progress update
       const progress = Math.round((segIndex + 1) / segments.length * 100);
       this.onProgress?.({
-        stage: 'concatenating',
+        stage: 'Concatenating',
         progress,
         total: 100,
         message: `Concatenating segment ${segIndex + 1}/${segments.length}`
@@ -282,7 +282,7 @@ export class AudioProcessor {
     }
 
     this.onProgress?.({
-      stage: 'exporting',
+      stage: 'Exporting',
       progress: 0,
       total: 100,
       message: `Exporting to ${format.toUpperCase()}...`
@@ -298,7 +298,7 @@ export class AudioProcessor {
       await this.ffmpeg.writeFile('temp.wav', wavData);
 
       this.onProgress?.({
-        stage: 'exporting',
+        stage: 'Exporting',
         progress: 50,
         total: 100,
         message: `Converting to ${format.toUpperCase()}...`
@@ -325,7 +325,7 @@ export class AudioProcessor {
       console.log(`Export completed: ${outputData.length} bytes`);
       
       this.onProgress?.({
-        stage: 'exporting',
+        stage: 'Exporting',
         progress: 100,
         total: 100,
         message: `Export to ${format.toUpperCase()} complete`

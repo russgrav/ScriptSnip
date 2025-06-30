@@ -27,6 +27,7 @@ export class CondenserEngine {
     };
     this.processingTimes = [];
     this.progressTimer = null;
+    this.progressHistory = []; // Track progress over time for better estimates
     
     // Define stage weights for smooth progress calculation
     this.stageWeights = {
@@ -98,7 +99,19 @@ export class CondenserEngine {
   updateProgressValue(currentFileProgress) {
     this.currentProgress.currentFileProgress = Math.min(Math.max(currentFileProgress, 0), 100);
     this.currentProgress.percentComplete = this.calculateOverallProgress(this.currentProgress.currentFileProgress);
-    this.currentProgress.estimatedTimeRemaining = this.calculateEstimatedTime(this.currentProgress.currentFileProgress);
+    
+    // Track progress history for better time estimates
+    const now = Date.now();
+    this.progressHistory.push({
+      timestamp: now,
+      progress: this.currentProgress.percentComplete
+    });
+    
+    // Keep only last 10 seconds of history
+    const cutoff = now - 10000;
+    this.progressHistory = this.progressHistory.filter(entry => entry.timestamp > cutoff);
+    
+    this.currentProgress.estimatedTimeRemaining = this.calculateEstimatedTime();
     
     this.onProgress?.({ ...this.currentProgress });
   }
@@ -155,22 +168,69 @@ export class CondenserEngine {
   }
 
   /**
-   * Calculate estimated time remaining
+   * Calculate estimated time remaining with improved accuracy
    */
-  calculateEstimatedTime(currentFileProgress) {
+  calculateEstimatedTime() {
     if (!this.currentProgress.startTime || this.currentProgress.totalFiles <= 1) {
       return null;
     }
     
-    const elapsed = Date.now() - this.currentProgress.startTime;
-    const overallProgress = this.calculateOverallProgress(currentFileProgress);
+    const now = Date.now();
+    const elapsed = now - this.currentProgress.startTime;
+    const currentProgress = this.currentProgress.percentComplete;
     
-    if (overallProgress <= 0) return null;
+    // Don't show estimates until we have some meaningful progress
+    if (currentProgress < 5 || elapsed < 3000) {
+      return null;
+    }
     
-    const estimatedTotal = (elapsed / overallProgress) * 100;
-    const remaining = estimatedTotal - elapsed;
+    let timeRemaining = null;
     
-    return Math.max(remaining, 0);
+    // Use historical data if we have enough samples
+    if (this.progressHistory.length >= 3) {
+      // Calculate average speed over recent history
+      const recentHistory = this.progressHistory.slice(-5); // Last 5 data points
+      const oldestRecent = recentHistory[0];
+      const newest = recentHistory[recentHistory.length - 1];
+      
+      const timeDiff = newest.timestamp - oldestRecent.timestamp;
+      const progressDiff = newest.progress - oldestRecent.progress;
+      
+      if (timeDiff > 1000 && progressDiff > 0) { // At least 1 second and some progress
+        const progressRate = progressDiff / timeDiff; // progress per millisecond
+        const remainingProgress = 100 - currentProgress;
+        timeRemaining = remainingProgress / progressRate;
+      }
+    }
+    
+    // Fallback to simple linear estimation (but only after more progress)
+    if (!timeRemaining && currentProgress > 15) {
+      const progressRate = currentProgress / elapsed;
+      const remainingProgress = 100 - currentProgress;
+      timeRemaining = remainingProgress / progressRate;
+    }
+    
+    // Apply some smoothing and bounds
+    if (timeRemaining) {
+      // Don't show estimates that are clearly wrong
+      if (timeRemaining > 30 * 60 * 1000) { // More than 30 minutes
+        return null;
+      }
+      
+      // Smooth the estimate to avoid wild fluctuations
+      if (this.lastEstimate) {
+        const change = Math.abs(timeRemaining - this.lastEstimate);
+        const maxChange = this.lastEstimate * 0.3; // Max 30% change
+        if (change > maxChange) {
+          timeRemaining = this.lastEstimate + (timeRemaining > this.lastEstimate ? maxChange : -maxChange);
+        }
+      }
+      
+      this.lastEstimate = timeRemaining;
+      return Math.max(timeRemaining, 1000); // At least 1 second
+    }
+    
+    return null;
   }
 
   /**
@@ -194,6 +254,10 @@ export class CondenserEngine {
    */
   async condenseSingleFile(videoFile, subtitleFile, config, fileIndex = 1, totalFiles = 1) {
     const startTime = Date.now();
+    
+    // Reset progress tracking for new file
+    this.progressHistory = [];
+    this.lastEstimate = null;
     
     // Update progress context
     this.currentProgress.currentFile = videoFile.name;
