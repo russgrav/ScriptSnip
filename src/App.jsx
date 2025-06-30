@@ -184,7 +184,9 @@ function App() {
         const result = await condenserEngineRef.current.condenseSingleFile(
           videoFile,
           subtitleFile,
-          config
+          config,
+          1,
+          1
         );
         processResults = [result];
       } else {
@@ -382,21 +384,66 @@ function App() {
 
         {showProgress && (
           <div className="progress-section">
-            <div className="progress-text">
-              {progress.message ||
-                `${progress.stage}: ${progress.progress}/${progress.total}`}
-            </div>
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${
-                    progress.total > 0
-                      ? (progress.progress / progress.total) * 100
-                      : 0
-                  }%`,
-                }}
-              />
+            {/* File progress header */}
+            {progress.totalFiles > 1 && (
+              <div className="progress-file-info">
+                <h4>Processing file {progress.fileIndex} of {progress.totalFiles}</h4>
+                <div className="progress-current-file">📁 {progress.currentFile}</div>
+              </div>
+            )}
+            
+            {/* Overall progress bar for multiple files */}
+            {progress.totalFiles > 1 && (
+              <div className="progress-overall">
+                <div className="progress-header">
+                  <span className="progress-label">Overall Progress</span>
+                  <span className="progress-percentage">
+                    {progress.percentComplete?.toFixed(1) || 0}%
+                    {progress.estimatedTimeRemaining && (
+                      <span className="progress-eta">
+                        {" "}- Est. {condenserEngineRef.current?.formatTime(progress.estimatedTimeRemaining)} remaining
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="progress-bar progress-bar-overall">
+                  <div
+                    className="progress-fill"
+                    style={{
+                      width: `${progress.percentComplete || 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* Current stage progress */}
+            <div className="progress-stage">
+              <div className="progress-header">
+                <span className="progress-label">
+                  {progress.stage || 'Processing'}
+                  {progress.totalFiles === 1 && progress.currentFile && (
+                    <span className="progress-filename"> - {progress.currentFile}</span>
+                  )}
+                </span>
+                <span className="progress-percentage">
+                  {progress.total > 0 ? 
+                    `${Math.round(progress.currentFileProgress || 0)}% (${progress.progress}/${progress.total})` : 
+                    `${Math.round(progress.currentFileProgress || 0)}%`
+                  }
+                </span>
+              </div>
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{
+                    width: `${progress.currentFileProgress || 0}%`,
+                  }}
+                />
+              </div>
+              <div className="progress-message">
+                {progress.message}
+              </div>
             </div>
           </div>
         )}
@@ -726,8 +773,8 @@ function App() {
             color: "var(--text-secondary)",
           }}
         >
-          ScriptSnip now includes intelligent pattern-based file matching that
-          can pair video and subtitle files even when their names don't exactly
+          ScriptSnip includes intelligent pattern-based file matching that can
+          pair video and subtitle files even when their names don't exactly
           match. It recognizes episode numbers in various formats including
           bracketed numbers [01], season/episode patterns S01E01, and episode
           prefixes like "Episode 01".

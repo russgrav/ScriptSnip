@@ -467,11 +467,71 @@ body {
   border: 1px solid var(--border);
 }
 
-.progress-text {
+.progress-file-info {
+  margin-bottom: 1.5rem;
   text-align: center;
+}
+
+.progress-file-info h4 {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.progress-current-file {
   color: var(--text-secondary);
-  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  background: var(--bg-card);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  display: inline-block;
+  border: 1px solid var(--border);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-overall {
+  margin-bottom: 1.5rem;
+}
+
+.progress-stage {
+  /* Individual stage progress */
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.progress-label {
+  color: var(--text-primary);
   font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.progress-filename {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.progress-percentage {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.progress-eta {
+  color: var(--accent-primary);
+  font-size: 0.85rem;
 }
 
 .progress-bar {
@@ -480,6 +540,12 @@ body {
   background: var(--border);
   border-radius: 4px;
   overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-bar-overall {
+  height: 12px;
+  margin-bottom: 1rem;
 }
 
 .progress-fill {
@@ -487,6 +553,47 @@ body {
   background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
   transition: width 0.3s ease;
   width: 0%;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progress-message {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-align: center;
+  font-style: italic;
+  min-height: 1.2em;
+}
+
+.progress-text {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  font-weight: 500;
 }
 
 /* Results */
@@ -598,6 +705,25 @@ body {
 
   .file-drop-zone {
     padding: 2rem 1rem;
+  }
+
+  .progress-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .progress-percentage {
+    text-align: left;
+  }
+
+  .progress-current-file {
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .progress-file-info h4 {
+    font-size: 1rem;
   }
 }
 

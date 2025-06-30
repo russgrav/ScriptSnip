@@ -5,60 +5,260 @@ import { FileManager } from './file-manager.js';
 export class CondenserEngine {
   constructor(onProgress) {
     this.subtitleProcessor = new SubtitleProcessor();
-    this.audioProcessor = new AudioProcessor(onProgress);
+    this.audioProcessor = new AudioProcessor((progressData) => this.handleAudioProgress(progressData));
     this.fileManager = new FileManager();
     this.isProcessing = false;
     this.shouldStop = false;
+    this.onProgress = onProgress;
+    this.currentProgress = {
+      stage: '',
+      progress: 0,
+      total: 100,
+      message: '',
+      currentFile: '',
+      fileIndex: 0,
+      totalFiles: 0,
+      percentComplete: 0,
+      estimatedTimeRemaining: null,
+      startTime: null,
+      currentFileProgress: 0,
+      stageStartTime: null,
+      stageStartProgress: 0
+    };
+    this.processingTimes = [];
+    this.progressTimer = null;
+    
+    // Define stage weights for smooth progress calculation
+    this.stageWeights = {
+      'Reading subtitles': { start: 0, weight: 2 },
+      'Analyzing subtitles': { start: 2, weight: 3 },
+      'Extracting audio': { start: 5, weight: 40 },
+      'Processing segments': { start: 45, weight: 25 },
+      'Concatenating': { start: 70, weight: 15 },
+      'Exporting': { start: 85, weight: 12 },
+      'Creating subtitles': { start: 97, weight: 2 },
+      'Complete': { start: 99, weight: 1 }
+    };
+  }
+
+  /**
+   * Start smooth progress interpolation for a stage
+   */
+  startSmoothProgress(stage, message, estimatedDurationMs = 1000) {
+    this.stopSmoothProgress();
+    
+    const stageInfo = this.stageWeights[stage];
+    if (!stageInfo) return;
+    
+    this.currentProgress.stage = stage;
+    this.currentProgress.message = message;
+    this.currentProgress.stageStartTime = Date.now();
+    this.currentProgress.stageStartProgress = this.currentProgress.currentFileProgress;
+    
+    const targetProgress = stageInfo.start + stageInfo.weight;
+    const progressRange = targetProgress - this.currentProgress.stageStartProgress;
+    
+    // Update progress smoothly over time
+    this.progressTimer = setInterval(() => {
+      const elapsed = Date.now() - this.currentProgress.stageStartTime;
+      const progressRatio = Math.min(elapsed / estimatedDurationMs, 1);
+      
+      // Use easing function for more natural progress
+      const easedRatio = this.easeInOutCubic(progressRatio);
+      
+      const newProgress = this.currentProgress.stageStartProgress + (progressRange * easedRatio);
+      this.updateProgressValue(Math.min(newProgress, targetProgress));
+      
+      if (progressRatio >= 1) {
+        this.stopSmoothProgress();
+      }
+    }, 50); // Update every 50ms for smooth animation
+  }
+  
+  /**
+   * Stop smooth progress interpolation
+   */
+  stopSmoothProgress() {
+    if (this.progressTimer) {
+      clearInterval(this.progressTimer);
+      this.progressTimer = null;
+    }
+  }
+  
+  /**
+   * Easing function for natural progress animation
+   */
+  easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+  
+  /**
+   * Update progress value and notify UI
+   */
+  updateProgressValue(currentFileProgress) {
+    this.currentProgress.currentFileProgress = Math.min(Math.max(currentFileProgress, 0), 100);
+    this.currentProgress.percentComplete = this.calculateOverallProgress(this.currentProgress.currentFileProgress);
+    this.currentProgress.estimatedTimeRemaining = this.calculateEstimatedTime(this.currentProgress.currentFileProgress);
+    
+    this.onProgress?.({ ...this.currentProgress });
+  }
+
+  /**
+   * Handle progress updates from audio processor and add file context
+   */
+  handleAudioProgress(audioProgressData) {
+    // Stop any smooth interpolation since we have real progress data
+    this.stopSmoothProgress();
+    
+    // Calculate smooth progress for current file
+    const currentFileProgress = this.calculateCurrentFileProgress(audioProgressData);
+    
+    this.currentProgress.stage = audioProgressData.stage;
+    this.currentProgress.message = audioProgressData.message;
+    this.updateProgressValue(currentFileProgress);
+  }
+
+  /**
+   * Calculate smooth 0-100% progress for the current file
+   */
+  calculateCurrentFileProgress(audioProgressData) {
+    const stage = audioProgressData.stage;
+    const stageInfo = this.stageWeights[stage];
+    
+    if (!stageInfo) {
+      return this.currentProgress.currentFileProgress || 0;
+    }
+    
+    // Calculate progress within the current stage
+    let stageProgress = 0;
+    if (audioProgressData.total > 0) {
+      stageProgress = (audioProgressData.progress / audioProgressData.total);
+    }
+    
+    // Convert to overall file progress (0-100)
+    const fileProgress = stageInfo.start + (stageProgress * stageInfo.weight);
+    
+    return Math.min(Math.max(fileProgress, 0), 100);
+  }
+
+  /**
+   * Calculate overall progress across all files
+   */
+  calculateOverallProgress(currentFileProgress) {
+    if (this.currentProgress.totalFiles === 0) return 0;
+    
+    // Calculate overall progress across all files
+    const completedFiles = this.currentProgress.fileIndex - 1;
+    const overallProgress = ((completedFiles + (currentFileProgress / 100)) / this.currentProgress.totalFiles) * 100;
+    
+    return Math.min(Math.max(overallProgress, 0), 100);
+  }
+
+  /**
+   * Calculate estimated time remaining
+   */
+  calculateEstimatedTime(currentFileProgress) {
+    if (!this.currentProgress.startTime || this.currentProgress.totalFiles <= 1) {
+      return null;
+    }
+    
+    const elapsed = Date.now() - this.currentProgress.startTime;
+    const overallProgress = this.calculateOverallProgress(currentFileProgress);
+    
+    if (overallProgress <= 0) return null;
+    
+    const estimatedTotal = (elapsed / overallProgress) * 100;
+    const remaining = estimatedTotal - elapsed;
+    
+    return Math.max(remaining, 0);
+  }
+
+  /**
+   * Format time in a human-readable format
+   */
+  formatTime(milliseconds) {
+    if (!milliseconds) return null;
+    
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor((milliseconds % 60000) / 1000);
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   /**
    * Main condensing function (port from Python condense function)
    */
-  async condenseSingleFile(videoFile, subtitleFile, config) {
+  async condenseSingleFile(videoFile, subtitleFile, config, fileIndex = 1, totalFiles = 1) {
     const startTime = Date.now();
+    
+    // Update progress context
+    this.currentProgress.currentFile = videoFile.name;
+    this.currentProgress.fileIndex = fileIndex;
+    this.currentProgress.totalFiles = totalFiles;
+    this.currentProgress.startTime = this.currentProgress.startTime || startTime;
 
     try {
       // 1. Get subtitle content
       let subtitleContent;
       if (subtitleFile) {
+        this.startSmoothProgress('Reading subtitles', `Reading subtitles for ${videoFile.name}...`, 500);
         subtitleContent = await subtitleFile.text();
+        this.stopSmoothProgress();
+        this.setStageComplete('Reading subtitles', 'Subtitle content loaded');
       } else {
         throw new Error('No subtitle file provided. Embedded subtitle extraction not yet implemented.');
       }
 
       // 2. Extract periods from subtitles (Python: extract_periods)
+      this.startSmoothProgress('Analyzing subtitles', 'Extracting speech periods from subtitles...', 800);
       const periods = this.subtitleProcessor.extractPeriods(subtitleContent, config);
+      this.stopSmoothProgress();
+      this.setStageComplete('Analyzing subtitles', `Found ${periods.length} speech periods`);
       
       if (periods.length === 0) {
         throw new Error('No valid subtitle periods found after filtering');
       }
 
       // 3. Extract audio from video (Python: FFmpeg audio extraction)
+      // Audio processor will handle its own progress updates with real data
       const audioBuffer = await this.audioProcessor.extractAudio(videoFile);
       const originalDuration = this.audioProcessor.getAudioDuration(audioBuffer);
 
       // 4. Extract audio segments (Python: extract_audio_parts)
+      // Audio processor will handle its own progress updates with real data
       const audioSegments = await this.audioProcessor.extractAudioSegments(periods, audioBuffer);
-
+      
       // 5. Concatenate segments (Python: concatenate_audio_parts)
+      // Audio processor will handle its own progress updates with real data
       const condensedAudioBuffer = await this.audioProcessor.concatenateAudioSegments(audioSegments);
       const condensedDuration = this.audioProcessor.getAudioDuration(condensedAudioBuffer);
 
       // 6. Export to desired format
+      // Audio processor will handle its own progress updates with real data
       const audioBlob = await this.audioProcessor.exportAudio(condensedAudioBuffer, config.outputFormat);
 
       // 7. Create condensed subtitles if requested (Python: condense_subtitles)
       let subtitleBlob;
       if (config.outputCondensedSubtitles) {
+        this.startSmoothProgress('Creating subtitles', 'Creating condensed subtitles...', 300);
         const condensedSubtitleContent = this.subtitleProcessor.createCondensedSubtitles(
           periods,
           subtitleContent,
           config.condensedSubtitlesFormat
         );
         subtitleBlob = new Blob([condensedSubtitleContent], { type: 'text/plain' });
+        this.stopSmoothProgress();
+        this.setStageComplete('Creating subtitles', 'Condensed subtitles created');
       }
 
       const processingTime = Date.now() - startTime;
+      this.processingTimes.push(processingTime);
+      
+      this.setStageComplete('Complete', `Processing complete for ${videoFile.name}`);
 
       return {
         audioBlob,
@@ -71,6 +271,7 @@ export class CondenserEngine {
       };
 
     } catch (error) {
+      this.stopSmoothProgress(); // Clean up on error
       throw new Error(`Processing failed: ${error.message}`);
     }
   }
@@ -144,7 +345,13 @@ export class CondenserEngine {
           try {
             console.log(`Processing file ${item.index}/${processingQueue.length}: ${item.videoFile.name}`);
             
-            const result = await this.condenseSingleFile(item.videoFile, item.subtitleFile, config);
+            const result = await this.condenseSingleFile(
+              item.videoFile, 
+              item.subtitleFile, 
+              config, 
+              item.index, 
+              processingQueue.length
+            );
             results.push(result);
             
             // Force garbage collection hint
@@ -167,7 +374,13 @@ export class CondenserEngine {
 
           try {
             console.log(`Processing file ${item.index}/${processingQueue.length}: ${item.videoFile.name}`);
-            const result = await this.condenseSingleFile(item.videoFile, item.subtitleFile, config);
+            const result = await this.condenseSingleFile(
+              item.videoFile, 
+              item.subtitleFile, 
+              config, 
+              item.index, 
+              processingQueue.length
+            );
             return result;
           } catch (error) {
             console.error(`Failed to process ${item.videoFile.name}:`, error);
@@ -208,6 +421,7 @@ export class CondenserEngine {
   stop() {
     console.log('Stop requested...');
     this.shouldStop = true;
+    this.stopSmoothProgress();
   }
 
   /**
@@ -264,6 +478,41 @@ export class CondenserEngine {
   }
 
   /**
+   * Set a stage as complete and move to its end position
+   */
+  setStageComplete(stage, message) {
+    const stageInfo = this.stageWeights[stage];
+    if (stageInfo) {
+      const targetProgress = stageInfo.start + stageInfo.weight;
+      this.currentProgress.stage = stage;
+      this.currentProgress.message = message;
+      this.updateProgressValue(targetProgress);
+    }
+  }
+
+  /**
+   * Update progress with smooth transitions (for stages managed by CondenserEngine)
+   */
+  updateSmoothProgress(stage, progress, total, message) {
+    // Legacy method - convert to new smooth progress system
+    const progressData = {
+      stage,
+      progress,
+      total,
+      message
+    };
+    
+    this.handleAudioProgress(progressData);
+  }
+
+  /**
+   * Update progress with additional context (legacy method for compatibility)
+   */
+  updateProgress(stage, progress, total, message) {
+    this.updateSmoothProgress(stage, progress, total, message);
+  }
+
+  /**
    * Utility function for delays
    */
   sleep(ms) {
@@ -275,6 +524,7 @@ export class CondenserEngine {
    */
   async cleanup() {
     this.shouldStop = true;
+    this.stopSmoothProgress();
     await this.audioProcessor.cleanup();
   }
 }
