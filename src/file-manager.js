@@ -1,3 +1,5 @@
+import { IntelligentFileMatcher } from './intelligent-file-matcher.js';
+
 export class FileManager {
   constructor() {
     this.videoExtensions = new Set([
@@ -9,6 +11,9 @@ export class FileManager {
     this.subtitleExtensions = new Set([
       '.srt', '.ass', '.ssa', '.vtt'
     ]);
+    
+    // Initialize the intelligent file matcher
+    this.intelligentMatcher = new IntelligentFileMatcher();
   }
 
   /**
@@ -28,8 +33,8 @@ export class FileManager {
   }
 
   /**
-   * Find subtitle file with same name as video (port from Python find_subtitle_with_same_name_as_file)
-   * Enhanced with basic pattern matching for episode numbers
+   * Find subtitle file with same name as video (enhanced with cross-format matching)
+   * Now uses IntelligentFileMatcher for better episode matching
    */
   findSubtitleWithSameName(videoFile, allFiles, config) {
     const baseName = this.getBaseName(videoFile.name);
@@ -44,44 +49,33 @@ export class FileManager {
       }
     }
     
-    // If exact matching fails, try simple episode number matching
-    const videoEpisode = this.extractEpisodeNumber(videoFile.name);
-    if (videoEpisode) {
-      const subtitleFiles = allFiles.filter(f => this.isSubtitleFile(f));
-      for (const subtitleFile of subtitleFiles) {
-        const subtitleEpisode = this.extractEpisodeNumber(subtitleFile.name);
-        if (subtitleEpisode && videoEpisode === subtitleEpisode) {
-          console.log(`Found episode match: ${videoFile.name} (${videoEpisode}) -> ${subtitleFile.name} (${subtitleEpisode})`);
-          return subtitleFile;
-        }
+    // If exact matching fails, use intelligent cross-format matching
+    const subtitleFiles = allFiles.filter(f => this.isSubtitleFile(f));
+    if (subtitleFiles.length > 0) {
+      const enhancedConfig = {
+        ...config,
+        allVideoFiles: allFiles.filter(f => this.isVideoFile(f))
+      };
+      
+      const match = this.intelligentMatcher.findBestSubtitleMatch(
+        videoFile, 
+        subtitleFiles, 
+        enhancedConfig
+      );
+      
+      if (match) {
+        const videoInfo = this.intelligentMatcher.analyzeFilename(videoFile.name);
+        const subtitleInfo = this.intelligentMatcher.analyzeFilename(match.name);
+        
+        console.log(`Found intelligent match: ${videoFile.name} (episode ${videoInfo.episode}) -> ${match.name} (S${subtitleInfo.season}E${subtitleInfo.episode})`);
+        return match;
       }
     }
     
     return null;
   }
 
-  /**
-   * Simple episode number extraction for basic matching
-   */
-  extractEpisodeNumber(filename) {
-    // Try various episode number patterns
-    const patterns = [
-      /\[(\d+)\]/,           // [01], [1] - brackets
-      /S\d+E(\d+)/i,         // S01E01, S1E1 - season episode
-      /Episode[\s_]*(\d+)/i, // Episode 01, Episode_1
-      /Ep[\s_]*(\d+)/i,      // Ep01, Ep_1
-      /E(\d+)/i,             // E01, E1
-    ];
-    
-    for (const pattern of patterns) {
-      const match = filename.match(pattern);
-      if (match) {
-        return parseInt(match[1]);
-      }
-    }
-    
-    return null;
-  }
+
 
   /**
    * Find matching subtitles for video files (port from Python find_matching_subtitles_for_files)
@@ -227,7 +221,7 @@ export class FileManager {
   }
 
   /**
-   * Get matching statistics for a set of files
+   * Get matching statistics for a set of files (enhanced with cross-format detection)
    */
   getMatchingStats(videoFiles, allFiles, config) {
     const stats = {
@@ -236,8 +230,14 @@ export class FileManager {
       intelligentMatches: 0,
       noMatches: 0,
       matchedFiles: [],
-      unmatchedFiles: []
+      unmatchedFiles: [],
+      crossFormatDetected: false
     };
+
+    // Check if cross-format matching is being used
+    const subtitleFiles = allFiles.filter(f => this.isSubtitleFile(f));
+    const seasonMapping = this.intelligentMatcher.buildSeasonEpisodeMapping(videoFiles, subtitleFiles);
+    stats.crossFormatDetected = seasonMapping !== null;
 
     for (const videoFile of videoFiles) {
       const exactMatch = this.findExactMatch(videoFile, allFiles, config);
@@ -248,7 +248,8 @@ export class FileManager {
         stats.matchedFiles.push({ video: videoFile.name, subtitle: exactMatch.name, type: 'exact' });
       } else if (anyMatch) {
         stats.intelligentMatches++;
-        stats.matchedFiles.push({ video: videoFile.name, subtitle: anyMatch.name, type: 'intelligent' });
+        const matchType = stats.crossFormatDetected ? 'cross-format' : 'intelligent';
+        stats.matchedFiles.push({ video: videoFile.name, subtitle: anyMatch.name, type: matchType });
       } else {
         stats.noMatches++;
         stats.unmatchedFiles.push(videoFile.name);
