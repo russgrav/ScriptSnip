@@ -55,3 +55,10 @@ jspm_packages/
 
 # TypeScript backup files
 *.ts.bak
+.vercel
+
+# Claude config
+.claude/
+
+# Vercel config
+vercel.json

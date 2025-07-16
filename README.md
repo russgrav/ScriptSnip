@@ -1,4 +1,4 @@
-# Audio Condenser - Web Version
+# ScriptSnip - Web Version
 
 A client-side web application that extracts speech audio from video files using subtitle timing, perfect for language immersion learning.
 
@@ -11,21 +11,34 @@ A client-side web application that extracts speech audio from video files using 
 - **Flexible output**: MP3, FLAC, WAV, AAC, OGG formats
 - **Condensed subtitles**: Optional SRT/LRC output matching the condensed timeline
 
-## How to Run
+## How to Use
 
-### Prerequisites
+### Try the Live App
+
+**🚀 Use ScriptSnip instantly at: [script-snip.vercel.app](https://script-snip.vercel.app/)**
+
+No installation required - just open the link in your browser and start processing!
+
+### Run Locally (Optional)
+
+If you prefer to run the app locally or want to contribute:
+
+#### Prerequisites
+
 - Node.js (version 16 or higher)
 - A modern web browser with SharedArrayBuffer support
 
-### Setup Instructions
+#### Setup Instructions
 
 1. **Install dependencies:**
+
    ```bash
-   cd audio-condenser
+   cd ScriptSnip
    npm install
    ```
 
 2. **Start the development server:**
+
    ```bash
    npm run dev
    ```
@@ -34,12 +47,12 @@ A client-side web application that extracts speech audio from video files using 
    - Navigate to `http://localhost:3000`
    - The app should load automatically
 
-### Important Browser Requirements
+#### Important Browser Requirements
 
 This app requires **SharedArrayBuffer** for optimal FFmpeg.wasm performance. Most modern browsers support this, but you need:
 
 - **Chrome/Edge**: Version 68+
-- **Firefox**: Version 79+  
+- **Firefox**: Version 79+
 - **Safari**: Version 15.2+
 
 The development server is configured with the required security headers automatically.
@@ -47,16 +60,19 @@ The development server is configured with the required security headers automati
 ## How to Use
 
 ### Basic Usage
+
 1. **Select files**: Drag and drop or click to select video files and their corresponding subtitle files
 2. **Configure settings**: Adjust padding, output format, and filtering options in the Configuration tab
 3. **Process**: Click the process button to start condensing
 4. **Download**: Processed files will automatically download when complete
 
 ### File Naming Convention
+
 The app automatically finds subtitle files that match your video files:
-- `movie.mp4` + `movie.srt` ✅
-- `episode01.mkv` + `episode01.ass` ✅  
-- `video.mp4` + `video_en.srt` ✅ (if you set "Subtitle Suffix" to "_en")
+
+- `movie.mp4` + `movie.srt`
+- `episode01.mkv` + `episode01.ass`
+- `video.mp4` + `video_en.srt` (if you set "Subtitle Suffix" to "\_en")
 
 ### Configuration Options
 
@@ -69,7 +85,7 @@ The app automatically finds subtitle files that match your video files:
 ## File Structure
 
 ```
-audio-condenser/
+ScriptSnip/
 ├── src/
 │   ├── types.ts              # TypeScript interfaces and types
 │   ├── subtitle-processor.ts # Subtitle parsing and filtering
@@ -85,8 +101,6 @@ audio-condenser/
 
 ## Technical Details
 
-This is a direct JavaScript port of the Python Condenser tool, maintaining the same algorithms and features:
-
 - **Subtitle Processing**: Parses SRT/ASS/VTT files, applies filtering, merges overlapping periods
 - **Audio Extraction**: Uses FFmpeg.wasm to extract audio from video files
 - **Segmentation**: Cuts audio based on subtitle timing with configurable padding
@@ -101,18 +115,22 @@ This is a direct JavaScript port of the Python Condenser tool, maintaining the s
 ## Troubleshooting
 
 ### "SharedArrayBuffer is not defined"
+
 - Make sure you're accessing via `http://localhost:3000` (not file://)
 - Try a different browser (Chrome/Firefox recommended)
 
 ### "FFmpeg failed to load"
+
 - Check your internet connection (FFmpeg.wasm loads from CDN)
 - Clear browser cache and reload
 
 ### "No subtitle file found"
+
 - Ensure subtitle files have the same base name as video files
 - Check the "Subtitle Suffix" setting if your subs have suffixes
 
 ### Large files processing slowly
+
 - Use smaller video files for testing
 - Try FLAC output for faster processing
 - Consider using the original Python version for very large batches
@@ -120,27 +138,13 @@ This is a direct JavaScript port of the Python Condenser tool, maintaining the s
 ## Development
 
 To build for production:
+
 ```bash
 npm run build
 ```
 
 To preview the production build:
+
 ```bash
 npm run preview
 ```
-
-## Comparison with Python Version
-
-This web version maintains feature parity with the original Python Condenser:
-
-| Feature | Python | Web |
-|---------|--------|-----|
-| Video formats | ✅ | ✅ |
-| Subtitle formats | ✅ | ✅ |
-| Batch processing | ✅ | ✅ |
-| Filtering options | ✅ | ✅ |
-| Output formats | ✅ | ✅ |
-| Condensed subtitles | ✅ | ✅ |
-| Embedded subtitles | ✅ | 🚧 (planned) |
-
-The main limitation is embedded subtitle extraction, which requires additional FFmpeg.wasm configuration.
