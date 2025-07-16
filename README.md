@@ -66,13 +66,29 @@ The development server is configured with the required security headers automati
 3. **Process**: Click the process button to start condensing
 4. **Download**: Processed files will automatically download when complete
 
-### File Naming Convention
+### Intelligent File Matching
 
-The app automatically finds subtitle files that match your video files:
+The app uses an advanced **intelligent matching algorithm** to automatically pair video and subtitle files, even with different naming conventions:
 
+#### Basic Matching
 - `movie.mp4` + `movie.srt`
 - `episode01.mkv` + `episode01.ass`
 - `video.mp4` + `video_en.srt` (if you set "Subtitle Suffix" to "\_en")
+
+#### Advanced Pattern Recognition
+The intelligent matcher can handle complex episode numbering:
+
+- **Season/Episode formats**: `S01E01`, `Season 1 Episode 1`, `1x01`
+- **Bracketed numbers**: `[01]`, `(14)`, `{Episode 23}`
+- **Episode prefixes**: `Episode 01`, `Ep01`, `E01`
+- **Sequential numbering**: `001`, `014`, `23`
+
+#### Cross-Format Matching
+Automatically matches files using different numbering systems:
+- Video: `[VCB-Studio] Series [14][1080p].mkv`
+- Subtitle: `Series S02E01.srt` (if Season 1 had 13 episodes)
+
+The algorithm intelligently detects when sequential and seasonal numbering need to be mapped together, making it work seamlessly with mixed media collections.
 
 ### Configuration Options
 
