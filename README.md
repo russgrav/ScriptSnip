@@ -1,4 +1,4 @@
-# ScriptSnip - Web Version
+# ScriptSnip
 
 A client-side web application that extracts speech audio from video files using subtitle timing, perfect for language immersion learning.
 
